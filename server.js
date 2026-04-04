@@ -3,8 +3,8 @@ import { readdir, readFile } from 'fs/promises';
 import escapeHtml from 'escape-html';
 import sanitizeFilename from "sanitize-filename";
 
-function sendHtml(res, jsx) {
-    const html = renderJSXToHTML(jsx)
+async function sendHtml(res, jsx) {
+    const html = await renderJSXToHTML(jsx)
     res.setHeader('Content-Type', 'text/html');
     res.end(html);
 }
@@ -32,35 +32,50 @@ function BlogLayout ({children}) {
     )
 }
 
-function BlogIndexPage({ postSlugs, postContents }) {
+async function Post ({ postSlug }){
+    try{
+        const postContent = await readFile(`./posts/${postSlug}.txt`, 'utf-8');
+        return (
+            <section key={postSlug}>
+                <h2>
+                    <a href={"/" + postSlug}>{postSlug}</a>
+                </h2>
+                <article>{postContent}</article>
+            </section>
+        )
+    }
+    catch(err){
+        throwNotFound(err);
+    }
+}
+
+async function BlogIndexPage() {
+    const postFiles = await readdir('./posts');
+    const postSlugs = postFiles.map((file) =>
+        file.slice(0, file.lastIndexOf("."))
+    );
+
     return (
         <section>
             <h1>Welcome to my blog</h1>
             <div>
-                {postSlugs.map((postSlug, index) => (
-                    <section key={postSlug}>
-                        <h2>
-                            <a href={"/" + postSlug}>{postSlug}</a>
-                        </h2>
-                        <article>{postContents[index]}</article>
-                    </section>
+                {postSlugs.map((postSlug) => (
+                    <Post
+                        key={postSlug}
+                        postSlug={postSlug}
+                    />
                 ))}
             </div>
         </section>
     );
 }
 
-function BlogPostPage ({postSlug, postContent}) {
+function BlogPostPage ({postSlug}) {
      return (
-        <section>
-            <h2>
-                <a href={"/" + postSlug}>{postSlug}</a>
-                <hr/>
-            </h2>
-            <article>
-                {postContent}
-            </article>
-        </section>
+         <Post
+             key={postSlug}
+             postSlug={postSlug}
+         />
     )
 }
 
@@ -76,58 +91,32 @@ function Footer (props) {
 createServer( async (req, res) => {
     try {
         const url = new URL(req.url, `http://${req.headers.host}`);
-        const page = await matchRoute(url);
-
-        sendHtml(
-            res,
-            <BlogLayout>
-                {page}
-            </BlogLayout>
-        );
+        await sendHtml(res, <Router url={url} />);
     }
     catch (err) {
-        console.error(err);
         res.statusCode = err.statusCode ?? 500;
         res.end();
     }
 }).listen(8080);
 
 function throwNotFound(cause) {
-    const notFound = new Error("Not found.", { cause });
+    const notFound = new Error("Not found", { cause });
     notFound.statusCode = 404;
     throw notFound;
 }
 
-async function matchRoute (url){
+async function Router (url){
+    let page;
     if(url.pathname === '/'){
-        const postFiles = await readdir('./posts');
-        const postSlugs = postFiles.map((file) =>
-            file.slice(0, file.lastIndexOf("."))
-        );
-        const postContents = await Promise.all(postFiles.map(async (postSlug) => {
-            return await readFile(`./posts/${postSlug}`, 'utf-8');
-        }));
-
-        return <BlogIndexPage
-            postSlugs={postSlugs}
-            postContents={postContents}
-        />
+        page =  <BlogIndexPage/>
     } else {
         const postSlug = sanitizeFilename(url.pathname.slice(1));
-        try{
-            const postContent = await readFile(`./posts/${postSlug}.txt`, 'utf-8');
-            return <BlogPostPage
-                postSlug={postSlug}
-                postContent={postContent}
-            />
-        }
-        catch(err){
-            throwNotFound(err);
-        }
+        page = <BlogPostPage postSlug={postSlug}/>
     }
+    return  <BlogLayout>{page}</BlogLayout>
 }
 
-function renderJSXToHTML(jsx) {
+async function renderJSXToHTML(jsx) {
     if (typeof jsx === 'string' || typeof jsx === 'number') {
         return escapeHtml(String(jsx));
     }
@@ -137,12 +126,13 @@ function renderJSXToHTML(jsx) {
     }
 
     if(Array.isArray(jsx)){
-        return jsx.map((item) => renderJSXToHTML(item)).join("");
+        return (await Promise.all(jsx.map(item => renderJSXToHTML(item)))).join("");
     }
 
     if(typeof jsx.type === 'function'){
         const Component = jsx.type;
-        return renderJSXToHTML(Component(jsx.props));
+        const jsx = await Component(jsx.props)
+        return await renderJSXToHTML(jsx);
     }
 
     if(!jsx.props.children){
@@ -156,6 +146,8 @@ function renderJSXToHTML(jsx) {
             attrs += ` ${prop}="${escapeHtml(props[prop])}"`;
         }
 
-        return `<${jsx.type}${attrs}>${renderJSXToHTML(jsx.props.children)}</${jsx.type}>`
+        const component = await renderJSXToHTML(jsx.props.children);
+
+        return `<${jsx.type}${attrs}>${component}</${jsx.type}>`
     }
 }
