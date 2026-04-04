@@ -1,6 +1,7 @@
 import { createServer } from 'http';
-import { readFile } from 'fs/promises';
+import { readdir, readFile } from 'fs/promises';
 import escapeHtml from 'escape-html';
+import sanitizeFilename from "sanitize-filename";
 
 function sendHtml(res, jsx) {
     const html = renderJSXToHTML(jsx)
@@ -8,8 +9,11 @@ function sendHtml(res, jsx) {
     res.end(html);
 }
 
-function BlogPostPage ({postContent, footerText}) {
-     return (
+function BlogLayout ({children}) {
+    const author = 'Vitalii';
+    const footerText = `(c) ${author}, ${new Date().getFullYear()}`
+
+    return (
         <html lang="eng">
         <head>
             <title>My blog</title>
@@ -19,12 +23,44 @@ function BlogPostPage ({postContent, footerText}) {
             <a href="/">Home</a>
             <hr/>
         </nav>
-        <article>
-            {postContent}
-        </article>
+        <main>
+            {children}
+        </main>
         <Footer footerText={footerText} />
         </body>
         </html>
+    )
+}
+
+function BlogIndexPage({ postSlugs, postContents }) {
+    return (
+        <section>
+            <h1>Welcome to my blog</h1>
+            <div>
+                {postSlugs.map((postSlug, index) => (
+                    <section key={postSlug}>
+                        <h2>
+                            <a href={"/" + postSlug}>{postSlug}</a>
+                        </h2>
+                        <article>{postContents[index]}</article>
+                    </section>
+                ))}
+            </div>
+        </section>
+    );
+}
+
+function BlogPostPage ({postSlug, postContent}) {
+     return (
+        <section>
+            <h2>
+                <a href={"/" + postSlug}>{postSlug}</a>
+                <hr/>
+            </h2>
+            <article>
+                {postContent}
+            </article>
+        </section>
     )
 }
 
@@ -38,18 +74,58 @@ function Footer (props) {
 }
 
 createServer( async (req, res) => {
-    const author = 'Vitalii';
-    const footerText = `(c) ${author}, ${new Date().getFullYear()}`
-    const postContent = await readFile('./posts/hello-world.txt','utf-8');
+    try {
+        const url = new URL(req.url, `http://${req.headers.host}`);
+        const page = await matchRoute(url);
 
-    sendHtml(
-        res,
-        <BlogPostPage
-            postContent={postContent}
-            footerText={footerText}
-        />
-    );
+        sendHtml(
+            res,
+            <BlogLayout>
+                {page}
+            </BlogLayout>
+        );
+    }
+    catch (err) {
+        console.error(err);
+        res.statusCode = err.statusCode ?? 500;
+        res.end();
+    }
 }).listen(8080);
+
+function throwNotFound(cause) {
+    const notFound = new Error("Not found.", { cause });
+    notFound.statusCode = 404;
+    throw notFound;
+}
+
+async function matchRoute (url){
+    if(url.pathname === '/'){
+        const postFiles = await readdir('./posts');
+        const postSlugs = postFiles.map((file) =>
+            file.slice(0, file.lastIndexOf("."))
+        );
+        const postContents = await Promise.all(postFiles.map(async (postSlug) => {
+            return await readFile(`./posts/${postSlug}`, 'utf-8');
+        }));
+
+        return <BlogIndexPage
+            postSlugs={postSlugs}
+            postContents={postContents}
+        />
+    } else {
+        const postSlug = sanitizeFilename(url.pathname.slice(1));
+        try{
+            const postContent = await readFile(`./posts/${postSlug}.txt`, 'utf-8');
+            return <BlogPostPage
+                postSlug={postSlug}
+                postContent={postContent}
+            />
+        }
+        catch(err){
+            throwNotFound(err);
+        }
+    }
+}
 
 function renderJSXToHTML(jsx) {
     if (typeof jsx === 'string' || typeof jsx === 'number') {
