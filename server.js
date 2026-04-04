@@ -8,56 +8,78 @@ function sendHtml(res, jsx) {
     res.end(html);
 }
 
+function BlogPostPage ({postContent, footerText}) {
+     return (
+        <html lang="eng">
+        <head>
+            <title>My blog</title>
+        </head>
+        <body>
+        <nav>
+            <a href="/">Home</a>
+            <hr/>
+        </nav>
+        <article>
+            {postContent}
+        </article>
+        <Footer footerText={footerText} />
+        </body>
+        </html>
+    )
+}
+
+function Footer (props) {
+    return(
+        <footer>
+            <hr/>
+            <p><i>{ props.footerText }</i></p>
+        </footer>
+    )
+}
+
 createServer( async (req, res) => {
-    const author = 'Vitalii'
+    const author = 'Vitalii';
+    const footerText = `(c) ${author}, ${new Date().getFullYear()}`
     const postContent = await readFile('./posts/hello-world.txt','utf-8');
 
-    sendHtml(res,
-        <html lang="eng">
-            <head>
-                <title>My blog</title>
-            </head>
-            <body>
-            <nav>
-                <a href="/">Home</a>
-                <hr/>
-            </nav>
-            <article>
-                {postContent}
-            </article>
-            <footer>
-                <hr/>
-                <p><i>{`(c) ${author}, ${new Date().getFullYear()}`}</i></p>
-            </footer>
-            </body>
-        </html>
+    sendHtml(
+        res,
+        <BlogPostPage
+            postContent={postContent}
+            footerText={footerText}
+        />
     );
 }).listen(8080);
 
-function renderJSXToHTML(value) {
-    if (typeof value === 'string' || typeof value === 'number') {
+function renderJSXToHTML(jsx) {
+    if (typeof jsx === 'string' || typeof jsx === 'number') {
         return escapeHtml(String(value));
     }
 
-    if (typeof value === "boolean" || value == null) {
+    if (typeof jsx === "boolean" || jsx == null) {
         return "";
     }
 
-    if(Array.isArray(value)){
-        return value.map((item) => renderJSXToHTML(item)).join("");
+    if(Array.isArray(jsx)){
+        return jsx.map((item) => renderJSXToHTML(item)).join("");
     }
 
-    if(!value.props.children){
+    if(typeof jsx.type === 'function'){
+        const Component = jsx.type;
+        return renderJSXToHTML(Component(jsx.props));
+    }
+
+    if(!jsx.props.children){
         return `<${value.type}>`;
     }
 
-    if (typeof value === 'object') {
-        const {children, ...props} = value.props;
+    if (typeof jsx === 'object') {
+        const {children, ...props} = jsx.props;
         let attrs = '';
         for (const prop in props) {
             attrs += ` ${prop}="${escapeHtml(props[prop])}"`;
         }
 
-        return `<${value.type}${attrs}>${renderJSXToHTML(value.props.children)}</${value.type}>`
+        return `<${jsx.type}${attrs}>${renderJSXToHTML(jsx.props.children)}</${jsx.type}>`
     }
 }
