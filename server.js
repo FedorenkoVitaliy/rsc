@@ -53,7 +53,7 @@ createServer( async (req, res) => {
 
 function renderJSXToHTML(jsx) {
     if (typeof jsx === 'string' || typeof jsx === 'number') {
-        return escapeHtml(String(value));
+        return escapeHtml(String(jsx));
     }
 
     if (typeof jsx === "boolean" || jsx == null) {
