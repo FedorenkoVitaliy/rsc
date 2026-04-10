@@ -4,9 +4,16 @@ import escapeHtml from 'escape-html';
 import sanitizeFilename from "sanitize-filename";
 
 async function sendHtml(res, jsx) {
-    const html = await renderJSXToHTML(jsx)
+    let html = await renderJSXToHTML(jsx);
+    html += `<script type="module" src="/client.js"></script>`;
     res.setHeader('Content-Type', 'text/html');
     res.end(html);
+}
+
+async function sendScript(res, filename) {
+    const content = await readFile(filename, "utf8");
+    res.setHeader('Content-Type', 'text/javascript');
+    res.end(content);
 }
 
 function BlogLayout ({children}) {
@@ -22,6 +29,7 @@ function BlogLayout ({children}) {
         <nav>
             <a href="/">Home</a>
             <hr/>
+            <input placeholder="Введи щось..." />
         </nav>
         <main>
             {children}
@@ -91,6 +99,9 @@ function Footer (props) {
 createServer( async (req, res) => {
     try {
         const url = new URL(req.url, `http://${req.headers.host}`);
+        if (url.pathname === '/client.js') {
+            await sendScript(res, "./client.js");
+        }
         await sendHtml(res, <Router url={url} />);
     }
     catch (err) {
@@ -105,7 +116,7 @@ function throwNotFound(cause) {
     throw notFound;
 }
 
-async function Router (url){
+async function Router ({ url }){
     let page;
     if(url.pathname === '/'){
         page =  <BlogIndexPage/>
@@ -131,8 +142,8 @@ async function renderJSXToHTML(jsx) {
 
     if(typeof jsx.type === 'function'){
         const Component = jsx.type;
-        const jsx = await Component(jsx.props)
-        return await renderJSXToHTML(jsx);
+        const result = await Component(jsx.props)
+        return await renderJSXToHTML(result);
     }
 
     if(!jsx.props.children){
