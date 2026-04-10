@@ -105,7 +105,7 @@ function throwNotFound(cause) {
     throw notFound;
 }
 
-async function Router (url){
+async function Router ({ url }){
     let page;
     if(url.pathname === '/'){
         page =  <BlogIndexPage/>
@@ -131,8 +131,8 @@ async function renderJSXToHTML(jsx) {
 
     if(typeof jsx.type === 'function'){
         const Component = jsx.type;
-        const jsx = await Component(jsx.props)
-        return await renderJSXToHTML(jsx);
+        const result = await Component(jsx.props)
+        return await renderJSXToHTML(result);
     }
 
     if(!jsx.props.children){
