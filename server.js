@@ -6,6 +6,8 @@ import sanitizeFilename from "sanitize-filename";
 const reactElementReplacer = (key, value) => {
     if (value === Symbol.for("react.element") || value === Symbol.for("react.transitional.element")) {
         return "$RE";
+    } else if (typeof value === "string" && value.startsWith("$")) {
+        return "$" + value;
     }
     return value;
 }
@@ -223,6 +225,7 @@ createServer( async (req, res) => {
         }
     }
     catch (err) {
+        console.error(err);
         res.statusCode = err.statusCode ?? 500;
         res.end();
     }

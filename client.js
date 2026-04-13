@@ -3,6 +3,8 @@ import { hydrateRoot } from "https://esm.sh/react-dom/client";
 const reactElementReviewer = (key, value) => {
     if (value === "$RE") {
         return Symbol.for("react.transitional.element");
+    } else if (typeof value === "string" && value.startsWith("$$")) {
+        return value.slice(1);
     }
     return value;
 }
