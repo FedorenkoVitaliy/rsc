@@ -1,7 +1,7 @@
 import { createServer } from 'http';
 import { readdir, readFile } from 'fs/promises';
-import escapeHtml from 'escape-html';
 import sanitizeFilename from "sanitize-filename";
+import { renderToString } from 'react-dom/server';
 
 const reactElementReplacer = (key, value) => {
     if (value === Symbol.for("react.element") || value === Symbol.for("react.transitional.element")) {
@@ -21,7 +21,7 @@ async function sendScript(res, filename) {
 async function sendHtml(res, jsx) {
     const clientJSX = await renderJSXToClientJSX(jsx);
     const clientJSXString = JSON.stringify(clientJSX, reactElementReplacer, 2);
-    let html = await renderJSXToHTML(clientJSX);
+    let html = renderToString(clientJSX);
     html += `<script>window.__INITIAL_CLIENT_JSX_STRING__ =${JSON.stringify(clientJSXString)}</script>`;
     html += `<script type="module" src="/client.js"></script>`;
     res.setHeader('Content-Type', 'text/html');
@@ -44,11 +44,11 @@ function BlogLayout ({children}) {
         <head>
             <title>My blog</title>
         </head>
-        <body style="background: #000000bd">
+        <body>
             <nav>
                 <a href="/">Home</a>
                 <hr/>
-                <input placeholder="Введи щось..." />
+                <input placeholder="Input something..." />
             </nav>
             <main>
                 {children}
@@ -130,42 +130,6 @@ async function Router ({ url }){
         page = <BlogPostPage postSlug={postSlug}/>
     }
     return  <BlogLayout>{page}</BlogLayout>
-}
-
-async function renderJSXToHTML(jsx) {
-    if (typeof jsx === 'string' || typeof jsx === 'number') {
-        return escapeHtml(String(jsx));
-    }
-
-    if (typeof jsx === "boolean" || jsx == null) {
-        return "";
-    }
-
-    if(Array.isArray(jsx)){
-        return (await Promise.all(jsx.map(item => renderJSXToHTML(item)))).join("");
-    }
-
-    if(typeof jsx.type === 'function'){
-        const Component = jsx.type;
-        const result = await Component(jsx.props)
-        return await renderJSXToHTML(result);
-    }
-
-    if(!jsx.props.children){
-        return `<${jsx.type}>`;
-    }
-
-    if (typeof jsx === 'object') {
-        const {children, ...props} = jsx.props;
-        let attrs = '';
-        for (const prop in props) {
-            attrs += ` ${prop}="${escapeHtml(props[prop])}"`;
-        }
-
-        const component = await renderJSXToHTML(jsx.props.children);
-
-        return `<${jsx.type}${attrs}>${component}</${jsx.type}>`
-    }
 }
 
 async function renderJSXToClientJSX(jsx) {
