@@ -3,6 +3,12 @@ import { readdir, readFile } from 'fs/promises';
 import escapeHtml from 'escape-html';
 import sanitizeFilename from "sanitize-filename";
 
+const reactElementReplacer = (key, value) => {
+    if (value === Symbol.for("react.element") || value === Symbol.for("react.transitional.element")) {
+        return "$RE";
+    }
+    return value;
+}
 
 async function sendScript(res, filename) {
     const content = await readFile(filename, "utf8");
@@ -12,6 +18,9 @@ async function sendScript(res, filename) {
 
 async function sendHtml(res, jsx) {
     let html = await renderJSXToHTML(jsx);
+    const clientJSX = await renderJSXToClientJSX(jsx);
+    const clientJSXString = JSON.stringify(clientJSX, reactElementReplacer, 2);
+    html += `<script>window.__INITIAL_CLIENT_JSX_STRING__ =${JSON.stringify(clientJSXString)}</script>`;
     html += `<script type="module" src="/client.js"></script>`;
     res.setHeader('Content-Type', 'text/html');
     res.end(html);
@@ -19,7 +28,7 @@ async function sendHtml(res, jsx) {
 
 async function sendJSX(res, jsx) {
     const clientJSX = await renderJSXToClientJSX(jsx);
-    const clientJSXString = JSON.stringify(clientJSX, null, 2);
+    const clientJSXString = JSON.stringify(clientJSX, reactElementReplacer, 2);
     res.setHeader("Content-Type", "application/json");
     res.end(clientJSXString);
 }
@@ -205,7 +214,6 @@ createServer( async (req, res) => {
     try {
         const url = new URL(req.url, `http://${req.headers.host}`);
         if (url.pathname === '/client.js') {
-            console.log('1');
             await sendScript(res, "./client.js");
         } else if (url.searchParams.has("jsx")) {
             url.searchParams.delete("jsx"); // Keep the url passed to the <Router> clean

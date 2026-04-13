@@ -1,3 +1,15 @@
+import { hydrateRoot } from "https://esm.sh/react-dom/client";
+
+const reactElementReviewer = (key, value) => {
+    if (value === "$RE") {
+        return Symbol.for("react.transitional.element");
+    }
+    return value;
+}
+
+const initialJSX = JSON.parse(window.__INITIAL_CLIENT_JSX_STRING__, reactElementReviewer);
+const root = hydrateRoot(document, initialJSX);
+
 let currentPathname = window.location.pathname;
 
 document.addEventListener(
@@ -5,10 +17,6 @@ document.addEventListener(
     async(e) => {
         if (e.target.tagName !== "A") {
             return;
-        }
-        if (e.target.tagName === 'A') {
-            e.preventDefault();
-            await navigate(e.target.href);
         }
         if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
             return;
@@ -29,7 +37,8 @@ async function navigate(pathname) {
     const response = await fetch(pathname + "?jsx");
     const jsonString = await response.text();
     if (pathname === currentPathname) {
-        alert(jsonString);
+        const clientJSX = JSON.parse(jsonString, reactElementReviewer);
+        root.render(clientJSX);
     }
 }
 
