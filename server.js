@@ -19,9 +19,9 @@ async function sendScript(res, filename) {
 }
 
 async function sendHtml(res, jsx) {
-    let html = await renderJSXToHTML(jsx);
     const clientJSX = await renderJSXToClientJSX(jsx);
     const clientJSXString = JSON.stringify(clientJSX, reactElementReplacer, 2);
+    let html = await renderJSXToHTML(clientJSX);
     html += `<script>window.__INITIAL_CLIENT_JSX_STRING__ =${JSON.stringify(clientJSXString)}</script>`;
     html += `<script type="module" src="/client.js"></script>`;
     res.setHeader('Content-Type', 'text/html');
