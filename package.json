@@ -2,7 +2,7 @@
   "name": "rsc",
   "version": "1.0.0",
   "scripts": {
-    "start": "nodemon -- --experimental-loader ./node-jsx-loader.js server.js"
+    "start": "concurrently \"nodemon -- --experimental-loader ./node-jsx-loader.js server/rsc.js\" \"nodemon -- --experimental-loader ./node-jsx-loader.js server/ssr.js\""
   },
   "type": "module",
   "private": true,
@@ -16,5 +16,8 @@
     "react": "^19.2.4",
     "react-dom": "^19.2.5",
     "sanitize-filename": "^1.6.4"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
   }
 }

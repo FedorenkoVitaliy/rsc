@@ -1,6 +1,5 @@
-import { createServer } from 'http';
+import {createServer} from "http";
 import { readdir, readFile } from 'fs/promises';
-import escapeHtml from 'escape-html';
 import sanitizeFilename from "sanitize-filename";
 
 const reactElementReplacer = (key, value) => {
@@ -12,27 +11,15 @@ const reactElementReplacer = (key, value) => {
     return value;
 }
 
-async function sendScript(res, filename) {
-    const content = await readFile(filename, "utf8");
-    res.setHeader('Content-Type', 'text/javascript');
-    res.end(content);
-}
-
-async function sendHtml(res, jsx) {
-    let html = await renderJSXToHTML(jsx);
-    const clientJSX = await renderJSXToClientJSX(jsx);
-    const clientJSXString = JSON.stringify(clientJSX, reactElementReplacer, 2);
-    html += `<script>window.__INITIAL_CLIENT_JSX_STRING__ =${JSON.stringify(clientJSXString)}</script>`;
-    html += `<script type="module" src="/client.js"></script>`;
-    res.setHeader('Content-Type', 'text/html');
-    res.end(html);
-}
-
-async function sendJSX(res, jsx) {
-    const clientJSX = await renderJSXToClientJSX(jsx);
-    const clientJSXString = JSON.stringify(clientJSX, reactElementReplacer, 2);
-    res.setHeader("Content-Type", "application/json");
-    res.end(clientJSXString);
+async function Router ({ url }){
+    let page;
+    if(url.pathname === '/'){
+        page =  <BlogIndexPage/>
+    } else {
+        const postSlug = sanitizeFilename(url.pathname.slice(1));
+        page = <BlogPostPage postSlug={postSlug}/>
+    }
+    return  <BlogLayout>{page}</BlogLayout>
 }
 
 function BlogLayout ({children}) {
@@ -44,16 +31,16 @@ function BlogLayout ({children}) {
         <head>
             <title>My blog</title>
         </head>
-        <body style="background: #000000bd">
-            <nav>
-                <a href="/">Home</a>
-                <hr/>
-                <input placeholder="Введи щось..." />
-            </nav>
-            <main>
-                {children}
-            </main>
-            <Footer footerText={footerText} />
+        <body>
+        <nav>
+            <a href="/">Home</a>
+            <hr/>
+            <input placeholder="Input something..." />
+        </nav>
+        <main>
+            {children}
+        </main>
+        <Footer footerText={footerText} />
         </body>
         </html>
     )
@@ -98,11 +85,11 @@ async function BlogIndexPage() {
 }
 
 function BlogPostPage ({postSlug}) {
-     return (
-         <Post
-             key={postSlug}
-             postSlug={postSlug}
-         />
+    return (
+        <Post
+            key={postSlug}
+            postSlug={postSlug}
+        />
     )
 }
 
@@ -119,53 +106,6 @@ function throwNotFound(cause) {
     const notFound = new Error("Not found", { cause });
     notFound.statusCode = 404;
     throw notFound;
-}
-
-async function Router ({ url }){
-    let page;
-    if(url.pathname === '/'){
-        page =  <BlogIndexPage/>
-    } else {
-        const postSlug = sanitizeFilename(url.pathname.slice(1));
-        page = <BlogPostPage postSlug={postSlug}/>
-    }
-    return  <BlogLayout>{page}</BlogLayout>
-}
-
-async function renderJSXToHTML(jsx) {
-    if (typeof jsx === 'string' || typeof jsx === 'number') {
-        return escapeHtml(String(jsx));
-    }
-
-    if (typeof jsx === "boolean" || jsx == null) {
-        return "";
-    }
-
-    if(Array.isArray(jsx)){
-        return (await Promise.all(jsx.map(item => renderJSXToHTML(item)))).join("");
-    }
-
-    if(typeof jsx.type === 'function'){
-        const Component = jsx.type;
-        const result = await Component(jsx.props)
-        return await renderJSXToHTML(result);
-    }
-
-    if(!jsx.props.children){
-        return `<${jsx.type}>`;
-    }
-
-    if (typeof jsx === 'object') {
-        const {children, ...props} = jsx.props;
-        let attrs = '';
-        for (const prop in props) {
-            attrs += ` ${prop}="${escapeHtml(props[prop])}"`;
-        }
-
-        const component = await renderJSXToHTML(jsx.props.children);
-
-        return `<${jsx.type}${attrs}>${component}</${jsx.type}>`
-    }
 }
 
 async function renderJSXToClientJSX(jsx) {
@@ -212,21 +152,22 @@ async function renderJSXToClientJSX(jsx) {
     } else throw new Error("Not implemented");
 }
 
+async function sendJSX(res, jsx) {
+    const clientJSX = await renderJSXToClientJSX(jsx);
+    const clientJSXString = JSON.stringify(clientJSX, reactElementReplacer, 2);
+    res.setHeader("Content-Type", "application/json");
+    res.end(clientJSXString);
+}
+
 createServer( async (req, res) => {
     try {
         const url = new URL(req.url, `http://${req.headers.host}`);
-        if (url.pathname === '/client.js') {
-            await sendScript(res, "./client.js");
-        } else if (url.searchParams.has("jsx")) {
-            url.searchParams.delete("jsx"); // Keep the url passed to the <Router> clean
-            await sendJSX(res, <Router url={url} />);
-        } else {
-            await sendHtml(res, <Router url={url} />);
-        }
+        url.searchParams.delete("jsx");
+        await sendJSX(res, <Router url={url} />);
     }
     catch (err) {
         console.error(err);
         res.statusCode = err.statusCode ?? 500;
         res.end();
     }
-}).listen(8080);
+}).listen(3001);
